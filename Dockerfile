@@ -1,27 +1,20 @@
-# Stage 1: Download public models
+# Stage 1: Download models
 FROM alpine/git:2.43.0 as download
 
 RUN apk add --no-cache wget && \
     mkdir /models && \
-    wget -v --content-disposition --show-progress -O /models/AnimeV1.safetensors https://civitai.com/api/download/models/712448 2>&1 || { echo "Failed to download AnimeV1"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/CinematicV1.safetensors https://civitai.com/api/download/models/501240 2>&1 || { echo "Failed to download CinematicV1"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/RealisticV1.safetensors https://civitai.com/api/download/models/1633727 2>&1 || { echo "Failed to download RealisticV1"; exit 1; } && \
-    mkdir /loras && \
-    wget -v --content-disposition --show-progress -O /loras/DetailEnhancer.safetensors https://civitai.com/api/download/models/532451 2>&1 || { echo "Failed to download DetailEnhancer"; exit 1; }
-
-# Stage 2: Download login-required models
-FROM alpine/git:2.43.0 as download_auth
-
-RUN apk add --no-cache wget && \
-    mkdir /models && \
+    wget -v --content-disposition --show-progress -O /models/AnimeV1.safetensors "https://civitai.com/api/download/models/712448?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download AnimeV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/CinematicV1.safetensors "https://civitai.com/api/download/models/501240?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download CinematicV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/RealisticV1.safetensors "https://civitai.com/api/download/models/1633727?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download RealisticV1"; exit 1; } && \
     wget -v --content-disposition --show-progress -O /models/AnimeV2.safetensors "https://civitai.com/api/download/models/1572570?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download AnimeV2"; exit 1; } && \
     wget -v --content-disposition --show-progress -O /models/FantasyV1.safetensors "https://civitai.com/api/download/models/547268?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download FantasyV1"; exit 1; } && \
     wget -v --content-disposition --show-progress -O /models/PhotorealV1.safetensors "https://civitai.com/api/download/models/671503?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download PhotorealV1"; exit 1; } && \
     wget -v --content-disposition --show-progress -O /models/ArtisticV1.safetensors "https://civitai.com/api/download/models/1031794?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download ArtisticV1"; exit 1; } && \
     mkdir /loras && \
+    wget -v --content-disposition --show-progress -O /loras/DetailEnhancer.safetensors "https://civitai.com/api/download/models/532451?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download DetailEnhancer"; exit 1; } && \
     wget -v --content-disposition --show-progress -O /loras/StyleBooster.safetensors "https://civitai.com/api/download/models/151465?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download StyleBooster"; exit 1; }
 
-# Stage 3: Build the final image
+# Stage 2: Build the final image
 FROM python:3.10.14-slim as build_final_image
 
 ARG A1111_RELEASE=v1.9.3
@@ -47,9 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
 
 COPY --from=download /models /stable-diffusion-webui/models/Stable-diffusion
-COPY --from=download_auth /models /stable-diffusion-webui/models/Stable-diffusion
 COPY --from=download /loras /stable-diffusion-webui/models/Lora
-COPY --from=download_auth /loras /stable-diffusion-webui/models/Lora
 
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
