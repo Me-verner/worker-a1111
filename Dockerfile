@@ -1,16 +1,28 @@
-# ---------------------------------------------------------------------------- #
-#                         Stage 1: Download the models                         #
-# ---------------------------------------------------------------------------- #
+# Stage 1: Download public models
 FROM alpine/git:2.43.0 as download
 
-# NOTE: CivitAI usually requires an API token, so you need to add it in the header
-#       of the wget command if you're using a model from CivitAI.
 RUN apk add --no-cache wget && \
-    wget -q -O /model.safetensors https://huggingface.co/XpucT/Deliberate/resolve/main/Deliberate_v6.safetensors
+    mkdir /models && \
+    wget -q -O /models/AnimeV1.safetensors https://civitai.com/api/download/models/712448 && \
+    wget -q -O /models/CinematicV1.safetensors https://civitai.com/api/download/models/501240 && \
+    wget -q -O /models/RealisticV1.safetensors https://civitai.com/api/download/models/1633727 && \
+    mkdir /loras && \
+    wget -q -O /loras/DetailEnhancer.safetensors https://civitai.com/api/download/models/532451
 
-# ---------------------------------------------------------------------------- #
-#                        Stage 2: Build the final image                        #
-# ---------------------------------------------------------------------------- #
+# Stage 2: Download login-required models
+FROM alpine/git:2.43.0 as download_auth
+
+ARG CIVITAI_TOKEN
+RUN apk add --no-cache wget && \
+    mkdir /models && \
+    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/AnimeV2.safetensors https://civitai.com/api/download/models/1572570 && \
+    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/FantasyV1.safetensors https://civitai.com/api/download/models/547268 && \
+    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/PhotorealV1.safetensors https://civitai.com/api/download/models/671503 && \
+    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/ArtisticV1.safetensors https://civitai.com/api/download/models/1031794 && \
+    mkdir /loras && \
+    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /loras/StyleBooster.safetensors https://civitai.com/api/download/models/151465
+
+# Stage 3: Build the final image
 FROM python:3.10.14-slim as build_final_image
 
 ARG A1111_RELEASE=v1.9.3
@@ -35,16 +47,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements_versions.txt && \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
 
-COPY --from=download /model.safetensors /model.safetensors
+COPY --from=download /models /stable-diffusion-webui/models/Stable-diffusion
+COPY --from=download_auth /models /stable-diffusion-webui/models/Stable-diffusion
+COPY --from=download /loras /stable-diffusion-webui/models/Lora
+COPY --from=download_auth /loras /stable-diffusion-webui/models/Lora
 
-# install dependencies
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
 
 COPY test_input.json .
-
-ADD src .
+COPY src .
 
 RUN chmod +x /start.sh
 CMD /start.sh
