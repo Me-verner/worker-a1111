@@ -3,11 +3,11 @@ FROM alpine/git:2.43.0 as download
 
 RUN apk add --no-cache wget && \
     mkdir /models && \
-    wget -q --content-disposition -O /models/AnimeV1.safetensors https://civitai.com/api/download/models/712448 && \
-    wget -q --content-disposition -O /models/CinematicV1.safetensors https://civitai.com/api/download/models/501240 && \
-    wget -q --content-disposition -O /models/RealisticV1.safetensors https://civitai.com/api/download/models/1633727 && \
+    wget -v --content-disposition --show-progress -O /models/AnimeV1.safetensors https://civitai.com/api/download/models/712448 2>&1 || { echo "Failed to download AnimeV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/CinematicV1.safetensors https://civitai.com/api/download/models/501240 2>&1 || { echo "Failed to download CinematicV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/RealisticV1.safetensors https://civitai.com/api/download/models/1633727 2>&1 || { echo "Failed to download RealisticV1"; exit 1; } && \
     mkdir /loras && \
-    wget -q --content-disposition -O /loras/DetailEnhancer.safetensors https://civitai.com/api/download/models/532451
+    wget -v --content-disposition --show-progress -O /loras/DetailEnhancer.safetensors https://civitai.com/api/download/models/532451 2>&1 || { echo "Failed to download DetailEnhancer"; exit 1; }
 
 # Stage 2: Download login-required models
 FROM alpine/git:2.43.0 as download_auth
