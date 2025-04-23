@@ -15,12 +15,12 @@ FROM alpine/git:2.43.0 as download_auth
 ARG CIVITAI_TOKEN
 RUN apk add --no-cache wget && \
     mkdir /models && \
-    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/AnimeV2.safetensors https://civitai.com/api/download/models/1572570 && \
-    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/FantasyV1.safetensors https://civitai.com/api/download/models/547268 && \
-    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/PhotorealV1.safetensors https://civitai.com/api/download/models/671503 && \
-    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /models/ArtisticV1.safetensors https://civitai.com/api/download/models/1031794 && \
+    wget -q -O /models/AnimeV2.safetensors "https://civitai.com/api/download/models/1572570?token=$CIVITAI_TOKEN" && \
+    wget -q -O /models/FantasyV1.safetensors "https://civitai.com/api/download/models/547268?token=$CIVITAI_TOKEN" && \
+    wget -q -O /models/PhotorealV1.safetensors "https://civitai.com/api/download/models/671503?token=$CIVITAI_TOKEN" && \
+    wget -q -O /models/ArtisticV1.safetensors "https://civitai.com/api/download/models/1031794?token=$CIVITAI_TOKEN" && \
     mkdir /loras && \
-    wget -q --header="Authorization: Bearer $CIVITAI_TOKEN" -O /loras/StyleBooster.safetensors https://civitai.com/api/download/models/151465
+    wget -q -O /loras/StyleBooster.safetensors "https://civitai.com/api/download/models/151465?token=$CIVITAI_TOKEN"
 
 # Stage 3: Build the final image
 FROM python:3.10.14-slim as build_final_image
