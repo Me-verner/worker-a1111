@@ -26,31 +26,31 @@ def wait_for_service(url):
         time.sleep(0.2)
 
 def set_model(model_name):
-    model_path = f"/stable-diffusion-webui/models/Stable-diffusion/{model_name}"
-    if not os.path.exists(model_path):
-        raise ValueError(f"Model file {model_name} not found in /stable-diffusion-webui/models/Stable-diffusion")
+    model_dir = "/stable-diffusion-webui/models/Stable-diffusion"
+    model_path = os.path.join(model_dir, model_name)
+    if not os.path.isfile(model_path):
+        raise ValueError(f"Model file {model_name} not found at {model_path}")
     
-    payload = {"sd_model_checkpoint": model_path}
+    payload = {"sd_model_checkpoint": model_name}
     response = automatic_session.post(f"{LOCAL_URL}/options", json=payload, timeout=60)
     if response.status_code != 200:
         raise Exception(f"Failed to set model: {response.text}")
 
 def get_available_models():
-    # Get list of model files (without .safetensors extension) and LoRAs
     model_dir = "/stable-diffusion-webui/models/Stable-diffusion"
     lora_dir = "/stable-diffusion-webui/models/Lora"
     
     models = []
     if os.path.exists(model_dir):
         for file in os.listdir(model_dir):
-            if file.endswith(".safetensors"):
-                models.append(file)  # Keep full filename including .safetensors
+            if file.endswith(".safetensors") and os.path.isfile(os.path.join(model_dir, file)):
+                models.append(file)
     
     loras = []
     if os.path.exists(lora_dir):
         for file in os.listdir(lora_dir):
-            if file.endswith(".safetensors"):
-                loras.append(file)  # Keep full filename including .safetensors
+            if file.endswith(".safetensors") and os.path.isfile(os.path.join(lora_dir, file)):
+                loras.append(file)
     
     return {
         "models": models,
@@ -64,11 +64,9 @@ def run_inference(inference_request):
 def handler(event):
     input_data = event["input"]
     
-    # Handle request for available models
     if input_data.get("action") == "get_models":
         return get_available_models()
 
-    # Handle inference request
     prompt = input_data.get("prompt", "a photo of an astronaut riding a horse on mars")
     negative_prompt = input_data.get("negative_prompt", "blurry, bad quality")
     model_name = input_data.get("model_name", "RealisticV1.safetensors")
