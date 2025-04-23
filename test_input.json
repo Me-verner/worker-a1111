@@ -1,7 +1,10 @@
 {
   "input": {
-    "prompt": "a photo of an astronaut riding a horse on mars",
-    "negative_prompt": "blurry, bad quality",
+    "prompt": "futuristic cityscape, photorealistic",
+    "negative_prompt": "blurry, low quality",
+    "model_name": "photoreal_v1",
+    "lora_name": "detail_enhancer",
+    "lora_weight": 0.7,
     "width": 512,
     "height": 512,
     "num_inference_steps": 20,
