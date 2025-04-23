@@ -12,17 +12,14 @@ RUN apk add --no-cache wget && \
 # Stage 2: Download login-required models
 FROM alpine/git:2.43.0 as download_auth
 
-ENV CIVITAI_TOKEN=not-set
 RUN apk add --no-cache wget && \
-    echo "CIVITAI_TOKEN is set to: ${CIVITAI_TOKEN:0:4}... (first 4 chars)" && \
-    [ "$CIVITAI_TOKEN" != "not-set" ] || { echo "Error: CIVITAI_TOKEN not provided"; exit 1; } && \
     mkdir /models && \
-    wget -v --content-disposition --show-progress -O /models/AnimeV2.safetensors "https://civitai.com/api/download/models/1572570?token=$CIVITAI_TOKEN" 2>&1 || { echo "Failed to download AnimeV2"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/FantasyV1.safetensors "https://civitai.com/api/download/models/547268?token=$CIVITAI_TOKEN" 2>&1 || { echo "Failed to download FantasyV1"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/PhotorealV1.safetensors "https://civitai.com/api/download/models/671503?token=$CIVITAI_TOKEN" 2>&1 || { echo "Failed to download PhotorealV1"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/ArtisticV1.safetensors "https://civitai.com/api/download/models/1031794?token=$CIVITAI_TOKEN" 2>&1 || { echo "Failed to download ArtisticV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/AnimeV2.safetensors "https://civitai.com/api/download/models/1572570?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download AnimeV2"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/FantasyV1.safetensors "https://civitai.com/api/download/models/547268?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download FantasyV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/PhotorealV1.safetensors "https://civitai.com/api/download/models/671503?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download PhotorealV1"; exit 1; } && \
+    wget -v --content-disposition --show-progress -O /models/ArtisticV1.safetensors "https://civitai.com/api/download/models/1031794?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download ArtisticV1"; exit 1; } && \
     mkdir /loras && \
-    wget -v --content-disposition --show-progress -O /loras/StyleBooster.safetensors "https://civitai.com/api/download/models/151465?token=$CIVITAI_TOKEN" 2>&1 || { echo "Failed to download StyleBooster"; exit 1; }
+    wget -v --content-disposition --show-progress -O /loras/StyleBooster.safetensors "https://civitai.com/api/download/models/151465?token=89f98b0d1d7c074688fc6958add259af" 2>&1 || { echo "Failed to download StyleBooster"; exit 1; }
 
 # Stage 3: Build the final image
 FROM python:3.10.14-slim as build_final_image
