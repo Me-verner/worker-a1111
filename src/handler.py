@@ -43,12 +43,23 @@ def refresh_checkpoints():
     response = automatic_session.post(f"{LOCAL_URL}/refresh-checkpoints", timeout=60)
     if response.status_code != 200:
         print(f"Warning: Failed to refresh checkpoints: {response.text}")
+    else:
+        print("Checkpoints refreshed successfully")
 
 def get_available_models():
     response = automatic_session.get(f"{LOCAL_URL}/sd-models", timeout=60)
     if response.status_code == 200:
         models = response.json()
-        return [model['title'] for model in models if model.get('title')]
+        model_names = []
+        for model in models:
+            # Prefer model_name, fall back to title, remove .safetensors if present
+            name = model.get('model_name', model.get('title', ''))
+            if name.endswith('.safetensors'):
+                name = name[:-11]
+            if name:
+                model_names.append(name)
+        print(f"Available models: {model_names}")
+        return model_names
     else:
         raise Exception(f"Failed to fetch models: {response.text}")
 
@@ -56,7 +67,9 @@ def get_available_loras():
     response = automatic_session.get(f"{LOCAL_URL}/loras", timeout=60)
     if response.status_code == 200:
         loras = response.json()
-        return [lora['name'] for lora in loras if lora.get('name')]
+        lora_names = [lora['name'] for lora in loras if lora.get('name')]
+        print(f"Available LoRAs: {lora_names}")
+        return lora_names
     else:
         raise Exception(f"Failed to fetch LoRAs: {response.text}")
 
@@ -64,27 +77,36 @@ def get_available_embeddings():
     response = automatic_session.get(f"{LOCAL_URL}/embeddings", timeout=60)
     if response.status_code == 200:
         embeddings = response.json()
-        return list(embeddings.get('loaded', {}).keys())
+        embedding_names = list(embeddings.get('loaded', {}).keys())
+        print(f"Available embeddings: {embedding_names}")
+        return embedding_names
     else:
         raise Exception(f"Failed to fetch embeddings: {response.text}")
 
 def get_available_vaes():
     vae_dir = MODEL_DIRS["vae"]
     if os.path.exists(vae_dir):
-        return [f for f in os.listdir(vae_dir) if f.endswith(('.pt', '.safetensors'))]
+        vae_names = [f for f in os.listdir(vae_dir) if f.endswith(('.pt', '.safetensors'))]
+        print(f"Available VAEs: {vae_names}")
+        return vae_names
+    print("No VAEs found")
     return []
 
 def get_available_controlnet_models():
     response = automatic_session.get(f"{LOCAL_URL}/controlnet/model_list", timeout=60)
     if response.status_code == 200:
-        return response.json().get('model_list', [])
+        models = response.json().get('model_list', [])
+        print(f"Available ControlNet models: {models}")
+        return models
     else:
         raise Exception(f"Failed to fetch ControlNet models: {response.text}")
 
 def get_available_controlnet_modules():
     response = automatic_session.get(f"{LOCAL_URL}/controlnet/module_list", timeout=60)
     if response.status_code == 200:
-        return response.json().get('module_list', [])
+        modules = response.json().get('module_list', [])
+        print(f"Available ControlNet modules: {modules}")
+        return modules
     else:
         raise Exception(f"Failed to fetch ControlNet modules: {response.text}")
 
@@ -110,6 +132,7 @@ def list_models(model_type=None):
             ]
         else:
             result[m_type] = []
+    print(f"Model list for {model_type or 'all types'}: {result}")
     return result if not model_type else result[model_type]
 
 def download_model(url, model_type=None, civitai_token=None, custom_dir=None):
@@ -121,7 +144,6 @@ def download_model(url, model_type=None, civitai_token=None, custom_dir=None):
     if response.status_code != 200:
         raise Exception(f"Failed to download model: {response.status_code} - {response.text}")
 
-    # Determine filename and model type if not provided
     content_disposition = response.headers.get('content-disposition')
     if content_disposition and 'filename=' in content_disposition:
         filename = content_disposition.split('filename=')[1].strip('";')
@@ -129,11 +151,10 @@ def download_model(url, model_type=None, civitai_token=None, custom_dir=None):
         filename = url.split("/")[-1] or "downloaded_model"
 
     extension = os.path.splitext(filename)[1].lower()
-    if not extension in VALID_EXTENSIONS:
+    if extension not in VALID_EXTENSIONS:
         raise ValueError(f"Unsupported file extension: {extension}")
 
     if not model_type:
-        # Infer model type from extension and URL context
         if extension in {'.ckpt', '.safetensors'}:
             model_type = "checkpoint" if "checkpoint" in url.lower() else "lora" if "lora" in url.lower() else "vae"
         elif extension == '.pt':
@@ -152,12 +173,14 @@ def download_model(url, model_type=None, civitai_token=None, custom_dir=None):
     with open(filepath, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
+    print(f"Model downloaded to {filepath}")
     return filepath
 
 def delete_model(model_name=None, model_type=None, path=None):
     if path:
         if os.path.exists(path):
             os.remove(path)
+            print(f"Model at {path} deleted")
             return {"message": f"Model at {path} deleted"}
         raise ValueError(f"File not found at path: {path}")
 
@@ -170,6 +193,7 @@ def delete_model(model_name=None, model_type=None, path=None):
     filepath = os.path.join(model_dir, model_name)
     if os.path.exists(filepath):
         os.remove(filepath)
+        print(f"Model {model_name} of type {model_type} deleted")
         return {"message": f"Model {model_name} of type {model_type} deleted"}
     raise ValueError(f"Model {model_name} not found in {model_type} directory")
 
@@ -179,6 +203,7 @@ def construct_prompt(base_prompt, loras, embeddings):
         prompt += f" <lora:{lora['name']}:{lora['weight']}>"
     for embedding in embeddings:
         prompt += f" {embedding}"
+    print(f"Constructed prompt: {prompt}")
     return prompt
 
 def get_override_settings(model_name, vae_name, extra_override_settings):
@@ -188,6 +213,7 @@ def get_override_settings(model_name, vae_name, extra_override_settings):
     if vae_name:
         override_settings["sd_vae"] = vae_name
     override_settings.update(extra_override_settings)
+    print(f"Override settings: {override_settings}")
     return override_settings
 
 def get_alwayson_scripts(controlnet_units, extra_alwayson_scripts):
@@ -213,12 +239,14 @@ def get_alwayson_scripts(controlnet_units, extra_alwayson_scripts):
             })
         alwayson_scripts["controlnet"] = {"args": args}
     alwayson_scripts.update(extra_alwayson_scripts)
+    print(f"Alwayson scripts: {alwayson_scripts}")
     return alwayson_scripts
 
 def run_inference(payload):
     response = automatic_session.post(f"{LOCAL_URL}/txt2img", json=payload, timeout=600)
     if response.status_code != 200:
-        raise Exception(f"Failed to generate image: {response.text}")
+        raise Exception(f"Failed to generate image: {response.status_code} - {response.text}")
+    print("Image generation successful")
     return response.json()
 
 def handler(event):
