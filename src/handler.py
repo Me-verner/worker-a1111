@@ -5,6 +5,7 @@ from requests.adapters import HTTPAdapter, Retry
 import os
 import json
 import time as time_module
+import re
 
 LOCAL_URL = "http://127.0.0.1:3000/sdapi/v1"
 
@@ -89,21 +90,27 @@ def get_models():
             }
     return result
 
+def extract_filename(response):
+    """Extract the filename from the response headers or URL."""
+    content_disposition = response.headers.get('Content-Disposition')
+    if content_disposition:
+        filename_match = re.search(r'filename="?(.+?)"?(;|$)', content_disposition)
+        if filename_match:
+            return filename_match.group(1)
+    url_filename = os.path.basename(response.url)
+    return url_filename if url_filename else "downloaded_model.safetensors"
+
 def download_model(input_data):
     """Download a model file from a URL and save it to the appropriate directory."""
     model_type = input_data["type"]
     url = input_data["url"]
-    filename = input_data["filename"]
+    filename = input_data.get("filename")
     token = input_data.get("token")
 
     if model_type not in directories:
         raise ValueError(f"Invalid model type: {model_type}")
 
     dir_path, extensions = directories[model_type]
-    target_path = os.path.join(dir_path, filename)
-
-    if not any(filename.endswith(ext) for ext in extensions):
-        raise ValueError(f"Filename {filename} does not have a valid extension for {model_type}")
 
     headers = {}
     if token:
@@ -112,6 +119,13 @@ def download_model(input_data):
     response = requests.get(url, headers=headers, stream=True)
     if response.status_code != 200:
         raise Exception(f"Failed to download file: {response.status_code} {response.reason}")
+
+    if not filename:
+        filename = extract_filename(response)
+        if not any(filename.endswith(ext) for ext in extensions):
+            raise ValueError(f"Extracted filename {filename} does not have a valid extension for {model_type}")
+
+    target_path = os.path.join(dir_path, filename)
 
     with open(target_path, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
@@ -126,6 +140,28 @@ def download_model(input_data):
         "modified": modified,
         "path": target_path
     }
+
+def rename_model(input_data):
+    """Rename a specified model file."""
+    model_type = input_data["type"]
+    old_filename = input_data["old_filename"]
+    new_filename = input_data["new_filename"]
+
+    if model_type not in directories:
+        raise ValueError(f"Invalid model type: {model_type}")
+
+    dir_path, extensions = directories[model_type]
+    old_path = os.path.join(dir_path, old_filename)
+    new_path = os.path.join(dir_path, new_filename)
+
+    if not os.path.exists(old_path):
+        raise ValueError(f"File {old_filename} not found in {dir_path}")
+
+    if not any(new_filename.endswith(ext) for ext in extensions):
+        raise ValueError(f"New filename {new_filename} does not have a valid extension for {model_type}")
+
+    os.rename(old_path, new_path)
+    return {"status": "renamed", "old_filename": old_filename, "new_filename": new_filename}
 
 def delete_model(input_data):
     """Delete a specified model file."""
@@ -186,6 +222,8 @@ def handler(event):
         return get_models()
     elif action == "download_model":
         return download_model(input_data)
+    elif action == "rename_model":
+        return rename_model(input_data)
     elif action == "delete_model":
         return delete_model(input_data)
     else:
