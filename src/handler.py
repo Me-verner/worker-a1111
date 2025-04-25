@@ -19,7 +19,7 @@ directories = {
     "checkpoints": ("/stable-diffusion-webui/models/Stable-diffusion", [".safetensors", ".ckpt"]),
     "loras": ("/stable-diffusion-webui/models/Lora", [".safetensors", ".pt"]),
     "vaes": ("/stable-diffusion-webui/models/VAE", [".safetensors", ".pt"]),
-    "embeddings": ("/stable-diffusion-webui/embeddings", [".pt", ".bin"]),
+    "embeddings": ("/stable-diffusion-webui/embeddings", [".pt", ".bin", ".safetensors"]),
 }
 
 def format_size(size):
