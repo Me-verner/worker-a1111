@@ -1,47 +1,45 @@
 import os
 import requests
 
-model_dirs = {
-    "checkpoint": "/stable-diffusion-webui/models/Stable-diffusion",
-    "lora": "/stable-diffusion-webui/models/Lora",
-    "vae": "/stable-diffusion-webui/models/VAE",
-    "embedding": "/stable-diffusion-webui/embeddings"
-}
-
-def download_file(url, save_path):
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+def download_file(url, target_path):
     with requests.get(url, stream=True) as r:
         r.raise_for_status()
-        filename = r.url.split("/")[-1].split("?")[0]
-        with open(os.path.join(save_path, filename), "wb") as f:
+        with open(target_path, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-    print(f"Downloaded {filename} to {save_path}")
 
-def download_models():
-    if not os.path.exists("models.txt"):
-        print("models.txt not found!")
+def process_filelist(filelist_path, base_dir):
+    if not os.path.exists(filelist_path):
+        print(f"Warning: {filelist_path} does not exist. Skipping...")
         return
-    with open("models.txt") as f:
-        for line in f:
-            if "|" not in line:
-                continue
-            type_, url = line.strip().split("|", 1)
-            if type_ in model_dirs:
-                download_file(url, model_dirs[type_])
 
-def install_extensions():
-    if not os.path.exists("extensions.txt"):
-        print("extensions.txt not found!")
+    with open(filelist_path, "r") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    if not lines:
+        print(f"No entries in {filelist_path}. Skipping...")
         return
-    with open("extensions.txt") as f:
-        for url in f:
-            url = url.strip()
-            if url:
-                cmd = f"git clone {url} /stable-diffusion-webui/extensions/{url.split('/')[-1]}"
-                os.system(cmd)
-                print(f"Installed extension from {url}")
 
-if __name__ == "__main__":
-    download_models()
-    install_extensions()
+    os.makedirs(base_dir, exist_ok=True)
+
+    for line in lines:
+        if "|" not in line:
+            print(f"Invalid line in {filelist_path}: {line}")
+            continue
+
+        type_part, url_part = line.split("|", 1)
+        filename = os.path.basename(url_part.split("?")[0])
+        save_path = os.path.join(base_dir, filename)
+
+        if os.path.exists(save_path):
+            print(f"Already exists: {save_path}")
+            continue
+
+        print(f"Downloading {filename} to {save_path}")
+        download_file(url_part, save_path)
+
+# Models download
+process_filelist("/models.txt", "/stable-diffusion-webui/models/Stable-diffusion")
+
+# Extensions install
+process_filelist("/extensions.txt", "/stable-diffusion-webui/extensions")
