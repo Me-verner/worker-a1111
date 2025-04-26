@@ -1,53 +1,47 @@
 import os
 import requests
 
-def download_file(url, dest_folder, filename=None):
-    if not os.path.exists(dest_folder):
-        os.makedirs(dest_folder)
-    if not filename:
-        filename = url.split("/")[-1].split("?")[0]
-    file_path = os.path.join(dest_folder, filename)
-    print(f"🔽 Downloading {filename}...")
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(file_path, 'wb') as f:
-            for chunk in response.iter_content(1024):
+model_dirs = {
+    "checkpoint": "/stable-diffusion-webui/models/Stable-diffusion",
+    "lora": "/stable-diffusion-webui/models/Lora",
+    "vae": "/stable-diffusion-webui/models/VAE",
+    "embedding": "/stable-diffusion-webui/embeddings"
+}
+
+def download_file(url, save_path):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        filename = r.url.split("/")[-1].split("?")[0]
+        with open(os.path.join(save_path, filename), "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-    else:
-        print(f"❌ Failed to download {url}")
-        exit(1)
+    print(f"Downloaded {filename} to {save_path}")
 
-# Download models
-print("🔽 Downloading models...")
-with open('models.txt', 'r') as f:
-    for line in f:
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        type_url = line.split(' ', 1)
-        if len(type_url) != 2:
-            print(f"❌ Invalid model entry: {line}")
-            exit(1)
-        model_type, url = type_url
-        if model_type == "checkpoint":
-            download_file(url, "downloads/checkpoints")
-        elif model_type == "lora":
-            download_file(url, "downloads/loras")
-        else:
-            print(f"❌ Unknown model type: {model_type}")
-            exit(1)
+def download_models():
+    if not os.path.exists("models.txt"):
+        print("models.txt not found!")
+        return
+    with open("models.txt") as f:
+        for line in f:
+            if "|" not in line:
+                continue
+            type_, url = line.strip().split("|", 1)
+            if type_ in model_dirs:
+                download_file(url, model_dirs[type_])
 
-# Download extensions
-print("🔽 Downloading extensions...")
-with open('extensions.txt', 'r') as f:
-    for line in f:
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        url = line
-        repo_name = url.rstrip('/').split('/')[-1]
-        dest_dir = os.path.join("downloads", "extensions", repo_name)
-        if not os.path.exists(dest_dir):
-            os.system(f"git clone {url} {dest_dir}")
-        else:
-            print(f"✅ Extension {repo_name} already cloned.")
+def install_extensions():
+    if not os.path.exists("extensions.txt"):
+        print("extensions.txt not found!")
+        return
+    with open("extensions.txt") as f:
+        for url in f:
+            url = url.strip()
+            if url:
+                cmd = f"git clone {url} /stable-diffusion-webui/extensions/{url.split('/')[-1]}"
+                os.system(cmd)
+                print(f"Installed extension from {url}")
+
+if __name__ == "__main__":
+    download_models()
+    install_extensions()
