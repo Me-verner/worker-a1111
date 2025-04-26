@@ -2,12 +2,11 @@
 
 echo "Worker Initiated"
 
-# Download models and extensions
-echo "Downloading models and extensions first..."
-python /download.py
-if [ $? -ne 0 ]; then
-  echo "Download failed. Exiting."
-  exit 1
+echo "Checking for additional downloads..."
+if [ -f /src/download.py ]; then
+  python /src/download.py
+else
+  echo "No download.py found, skipping downloads."
 fi
 
 echo "Starting WebUI API"
