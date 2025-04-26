@@ -1,13 +1,3 @@
-# Stage 1: Download models
-FROM alpine/git:2.43.0 as download
-
-RUN apk add --no-cache wget && \
-    mkdir /models && \
-    wget -v --content-disposition --show-progress -O /models/RealisticVision.safetensors "https://civitai.com/api/download/models/501240?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor&size=pruned&fp=fp16" 2>&1 || { echo "Failed to download RealisticVision"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/WaifuReaper.safetensors "https://civitai.com/api/download/models/648218?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor&size=pruned&fp=fp16" 2>&1 || { echo "Failed to download WaifuReaper"; exit 1; } && \
-    mkdir /loras && \
-    wget -v --content-disposition --show-progress -O /loras/AddDetail.safetensors "https://civitai.com/api/download/models/1506035?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor" 2>&1 || { echo "Failed to download AddDetail"; exit 1; }
-
 # Stage 2: Build the final image
 FROM python:3.10.14-slim as build_final_image
 
