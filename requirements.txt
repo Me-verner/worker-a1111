@@ -1,4 +1,5 @@
 runpod~=1.7.9
+xformers
 insightface==0.7.3
 onnx
 onnxruntime-gpu>=1.16.1
