@@ -1,4 +1,4 @@
-# Stage 1: Base Image
+# Stage 1: Base Image.
 FROM python:3.10.14-slim
 
 ARG A1111_RELEASE=v1.9.3
