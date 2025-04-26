@@ -26,17 +26,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
 
 # Copy requirement files and downloader script
-COPY requirements.txt .
-COPY models.txt .
-COPY extensions.txt .
-COPY download.sh .
+COPY requirements.txt /
+COPY models.txt /
+COPY extensions.txt /
+COPY download.sh /
 
 # Install python packages
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r /requirements.txt
 
 # Download models and extensions
-RUN chmod +x download.sh && ./download.sh
+RUN chmod +x /download.sh && /download.sh
 
 # Copy your scripts
 COPY src /src
