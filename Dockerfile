@@ -1,7 +1,7 @@
 # Stage 2: Build the final image
 FROM python:3.10.14-slim as build_final_image
 
-ARG A1111_RELEASE=v1.9.3
+ARG A1111_RELEASE=v1.10.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_PREFER_BINARY=1 \
@@ -22,9 +22,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install xformers && \
     pip install -r requirements_versions.txt && \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
-
-COPY --from=download /models /stable-diffusion-webui/models/Stable-diffusion
-COPY --from=download /loras /stable-diffusion-webui/models/Lora
 
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
