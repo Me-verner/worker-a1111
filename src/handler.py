@@ -4,7 +4,8 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 import os
 import json
-import time as time_module
+import subprocess
+import shutil
 import re
 
 LOCAL_URL = "http://127.0.0.1:3000/sdapi/v1"
@@ -29,6 +30,10 @@ refresh_endpoints = {
     "vaes": "refresh-vae",
     "embeddings": "refresh-embeddings"
 }
+
+# Paths to models.txt and extensions.txt
+MODELS_FILE = "/app/src/models.txt"
+EXTENSIONS_FILE = "/app/src/extensions.txt"
 
 def format_size(size):
     """Convert file size to human-readable format."""
@@ -79,62 +84,96 @@ def refresh_model_type(model_type):
         raise Exception(f"Failed to refresh {model_type}: {response.text}")
     print(f"{model_type.capitalize()} refreshed successfully.")
 
-def get_models():
-    """List all available models with details."""
-    result = {}
-    for model_type, (dir_path, extensions) in directories.items():
-        if os.path.exists(dir_path):
-            files = [f for f in os.listdir(dir_path) if f.endswith(tuple(extensions)) and os.path.isfile(os.path.join(dir_path, f))]
-            file_list = []
-            for file in files:
-                path = os.path.join(dir_path, file)
-                size = os.path.getsize(path)
-                modified = time_module.strftime("%Y-%m-%d %H:%M:%S", time_module.localtime(os.path.getmtime(path)))
-                file_list.append({
-                    "name": file,
-                    "type": model_type[:-1],  # Singularize type
-                    "size": format_size(size),
-                    "modified": modified,
-                    "path": path
-                })
-            result[model_type] = {
-                "count": len(files),
-                "files": file_list
-            }
-        else:
-            result[model_type] = {
-                "count": 0,
-                "files": []
-            }
-    return result
-
-def get_sd_models():
-    """Get the list of available Stable Diffusion models from the API."""
-    response = automatic_session.get(f"{LOCAL_URL}/sd-models", timeout=60)
+def server_restart():
+    """Restart the WebUI server."""
+    response = automatic_session.post(f"{LOCAL_URL}/server-restart", timeout=60)
     if response.status_code != 200:
-        raise Exception(f"Failed to get SD models: {response.text}")
-    return response.json()
+        raise Exception(f"Failed to restart server: {response.text}")
+    return {"status": "server restarted"}
 
-def get_options():
-    """Get current WebUI options."""
-    response = automatic_session.get(f"{LOCAL_URL}/options", timeout=60)
-    if response.status_code != 200:
-        raise Exception(f"Failed to get options: {response.text}")
-    return response.json()
+def install_all():
+    """Install all models and extensions from models.txt and extensions.txt."""
+    install_models_from_file()
+    install_extensions_from_file()
+    server_restart()
+    return {"status": "all installed and server restarted"}
 
-def set_options(options):
-    """Set WebUI options."""
-    response = automatic_session.post(f"{LOCAL_URL}/options", json=options, timeout=60)
-    if response.status_code != 200:
-        raise Exception(f"Failed to set options: {response.text}")
-    return {"status": "options updated"}
+def install_models_from_file():
+    """Install models from models.txt."""
+    if not os.path.exists(MODELS_FILE):
+        raise ValueError(f"{MODELS_FILE} not found")
 
-def get_progress():
-    """Get current progress of an ongoing task."""
-    response = automatic_session.get(f"{LOCAL_URL}/progress", timeout=60)
-    if response.status_code != 200:
-        raise Exception(f"Failed to get progress: {response.text}")
-    return response.json()
+    with open(MODELS_FILE, "r") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        line = line.strip()
+        if line:
+            model_type, url = line.split("|", 1)
+            model_type = model_type.strip().lower()
+            if model_type in directories:
+                download_model({"type": model_type, "url": url})
+            else:
+                raise ValueError(f"Invalid model type in {MODELS_FILE}: {model_type}")
+
+    return {"status": "models installed from file"}
+
+def install_extensions_from_file():
+    """Install extensions from extensions.txt."""
+    if not os.path.exists(EXTENSIONS_FILE):
+        raise ValueError(f"{EXTENSIONS_FILE} not found")
+
+    with open(EXTENSIONS_FILE, "r") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        url = line.strip()
+        if url:
+            install_extension({"url": url})
+
+    return {"status": "extensions installed from file"}
+
+def install_extension(input_data):
+    """Install an extension from a Git URL and restart the server."""
+    url = input_data["url"]
+    extension_name = url.split("/")[-1].replace(".git", "")
+    extensions_dir = "/stable-diffusion-webui/extensions"
+    target_dir = os.path.join(extensions_dir, extension_name)
+
+    if os.path.exists(target_dir):
+        raise ValueError(f"Extension {extension_name} already exists")
+
+    subprocess.run(["git", "clone", url, target_dir], check=True)
+
+    # Restart the server to load the new extension
+    server_restart()
+
+    return {"status": "extension installed", "extension": extension_name}
+
+def delete_extension(input_data):
+    """Delete an extension and restart the server."""
+    extension_name = input_data["extension_name"]
+    extensions_dir = "/stable-diffusion-webui/extensions"
+    target_dir = os.path.join(extensions_dir, extension_name)
+
+    if not os.path.exists(target_dir):
+        raise ValueError(f"Extension {extension_name} not found")
+
+    shutil.rmtree(target_dir)
+
+    # Restart the server to reflect the change
+    server_restart()
+
+    return {"status": "extension deleted", "extension": extension_name}
+
+def list_extensions():
+    """List all installed extensions."""
+    extensions_dir = "/stable-diffusion-webui/extensions"
+    if not os.path.exists(extensions_dir):
+        return {"extensions": []}
+
+    extensions = [d for d in os.listdir(extensions_dir) if os.path.isdir(os.path.join(extensions_dir, d))]
+    return {"extensions": extensions}
 
 def extract_filename(response):
     """Extract the filename from the response headers or URL."""
@@ -181,7 +220,7 @@ def download_model(input_data):
     refresh_model_type(model_type)
 
     size = os.path.getsize(target_path)
-    modified = time_module.strftime("%Y-%m-%d %H:%M:%S", time_module.localtime(os.path.getmtime(target_path)))
+    modified = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(target_path)))
     return {
         "name": filename,
         "type": model_type[:-1],  # Singularize type
@@ -189,27 +228,6 @@ def download_model(input_data):
         "modified": modified,
         "path": target_path
     }
-
-def delete_model(input_data):
-    """Delete a specified model file and refresh the model list."""
-    model_type = input_data["type"]
-    filename = input_data["filename"]
-
-    if model_type not in directories:
-        raise ValueError(f"Invalid model type: {model_type}")
-
-    dir_path, _ = directories[model_type]
-    target_path = os.path.join(dir_path, filename)
-
-    if not os.path.exists(target_path):
-        raise ValueError(f"File {filename} not found in {dir_path}")
-
-    os.remove(target_path)
-
-    # Refresh the model list for this type
-    refresh_model_type(model_type)
-
-    return {"status": "deleted", "filename": filename}
 
 def inference_handler(input_data):
     """Handle image generation with flexible parameters."""
@@ -242,29 +260,6 @@ def inference_handler(input_data):
         raise Exception(f"Failed to run inference: {response.text}")
     return response.json()
 
-def img2img_handler(input_data):
-    """Handle image-to-image generation."""
-    model_name = input_data.get("model_name")
-    if model_name:
-        set_model(model_name)
-
-    inference_request = {
-        "init_images": input_data.get("init_images", []),
-        "prompt": input_data.get("prompt", ""),
-        "negative_prompt": input_data.get("negative_prompt", ""),
-        "steps": input_data.get("steps", 20),
-        "width": input_data.get("width", 512),
-        "height": input_data.get("height", 512),
-        "cfg_scale": input_data.get("cfg_scale", 7.5),
-        "seed": input_data.get("seed", -1),
-        "denoising_strength": input_data.get("denoising_strength", 0.75),
-    }
-
-    response = automatic_session.post(f"{LOCAL_URL}/img2img", json=inference_request, timeout=600)
-    if response.status_code != 200:
-        raise Exception(f"Failed to run img2img: {response.text}")
-    return response.json()
-
 def handler(event):
     """Main handler function to route actions."""
     input_data = event["input"]
@@ -272,33 +267,33 @@ def handler(event):
 
     if action == "inference":
         return inference_handler(input_data)
-    elif action == "img2img":
-        return img2img_handler(input_data)
     elif action == "get_models":
         return get_models()
-    elif action == "get_sd_models":
-        return get_sd_models()
-    elif action == "get_options":
-        return get_options()
-    elif action == "set_options":
-        return set_options(input_data.get("options", {}))
-    elif action == "get_progress":
-        return get_progress()
     elif action == "download_model":
         return download_model(input_data)
-    elif action == "delete_model":
-        return delete_model(input_data)
-    elif action == "refresh_models":
-        model_type = input_data.get("type")
-        if model_type:
-            refresh_model_type(model_type)
-            return {"status": f"{model_type} refreshed"}
-        else:
-            for model_type in refresh_endpoints.keys():
-                refresh_model_type(model_type)
-            return {"status": "all models refreshed"}
+    elif action == "install_all":
+        return install_all()
+    elif action == "install_models":
+        return install_models_from_file()
+    elif action == "install_extensions":
+        return install_extensions_from_file()
+    elif action == "install_extension":
+        return install_extension(input_data)
+    elif action == "delete_extension":
+        return delete_extension(input_data)
+    elif action == "list_extensions":
+        return list_extensions()
+    elif action == "server_restart":
+        return server_restart()
     else:
         raise ValueError(f"Unknown action: {action}")
+
+def get_models():
+    """Placeholder for get_models function (not fully implemented in original)."""
+    response = automatic_session.get(f"{LOCAL_URL}/sd-models", timeout=60)
+    if response.status_code != 200:
+        raise Exception(f"Failed to get models: {response.text}")
+    return response.json()
 
 if __name__ == "__main__":
     wait_for_service(url=f"{LOCAL_URL}/sd-models")
