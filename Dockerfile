@@ -1,4 +1,4 @@
-# Stage 1: Download models and extensions
+# Stage 1: Download models and extensions.
 FROM alpine/git:2.43.0 as download
 
 RUN apk add --no-cache wget bash && \
