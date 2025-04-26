@@ -5,7 +5,7 @@ RUN apk add --no-cache wget
 
 WORKDIR /workspace
 
-COPY models.txt extensions.txt . 
+COPY models.txt extensions.txt .
 
 # Download models
 RUN mkdir -p models && \
