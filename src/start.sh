@@ -2,13 +2,6 @@
 
 echo "Worker Initiated"
 
-echo "Checking for additional downloads..."
-if [ -f /src/download.py ]; then
-  python /src/download.py
-else
-  echo "No download.py found, skipping downloads."
-fi
-
 echo "Starting WebUI API"
 TCMALLOC="$(ldconfig -p | grep -Po "libtcmalloc.so.\d" | head -n 1)"
 export LD_PRELOAD="${TCMALLOC}"
@@ -23,6 +16,7 @@ python /stable-diffusion-webui/webui.py \
   --disable-safe-unpickle \
   --port 3000 \
   --api \
+  --api-server-stop \
   --nowebui \
   --skip-version-check \
   --no-hashing \
