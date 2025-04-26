@@ -1,0 +1,3 @@
+checkpoint https://civitai.com/api/download/models/501240?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor&size=pruned&fp=fp16
+checkpoint https://civitai.com/api/download/models/648218?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor&size=pruned&fp=fp16
+lora https://civitai.com/api/download/models/1506035?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor
