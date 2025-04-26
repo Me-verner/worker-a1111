@@ -2,6 +2,14 @@
 
 echo "Worker Initiated"
 
+# Download models and extensions
+echo "Downloading models and extensions first..."
+python /download.py
+if [ $? -ne 0 ]; then
+  echo "Download failed. Exiting."
+  exit 1
+fi
+
 echo "Starting WebUI API"
 TCMALLOC="$(ldconfig -p | grep -Po "libtcmalloc.so.\d" | head -n 1)"
 export LD_PRELOAD="${TCMALLOC}"
