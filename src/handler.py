@@ -29,7 +29,7 @@ directories = {
 }
 
 # Map singular to plural model types
-type_mapping = {
+model_type_mapping = {
     "checkpoint": "checkpoints",
     "lora": "loras",
     "vae": "vaes",
@@ -94,17 +94,15 @@ def refresh_model_type(model_type):
     print(f"{model_type.capitalize()} refreshed successfully.")
 
 def restart_server():
-    """Attempt to restart the WebUI server via API or fallback."""
+    """Restart the WebUI server via API."""
     try:
         response = automatic_session.post(f"{LOCAL_URL}/server-restart", timeout=60)
         if response.status_code == 200:
             print("Server restart initiated.")
             return {"status": "restart initiated", "success": True}
         else:
-            print(f"Server restart failed: {response.text}")
-            return {"status": f"Failed to restart server: {response.text}", "success": False}
+            return {"status": f"Failed to restart server: HTTP {response.status_code} - {response.text}", "success": False}
     except Exception as e:
-        print(f"Server restart error: {str(e)}")
         return {"status": f"Failed to restart server: {str(e)}", "success": False}
 
 def extract_filename(response):
@@ -119,6 +117,8 @@ def extract_filename(response):
 
 def download_model(model_type, url, filename=None, token=None):
     """Download a model file from a URL and save it to the appropriate directory."""
+    # Map singular to plural model type if necessary
+    model_type = model_type_mapping.get(model_type, model_type)
     if model_type not in directories:
         raise ValueError(f"Invalid model type: {model_type}")
 
@@ -173,10 +173,8 @@ def install_from_file(file_path, install_type):
         if install_type == "models":
             try:
                 model_type, url = line.split('|', 1)
-                model_type = model_type.strip().lower()
+                model_type = model_type.strip()
                 url = url.strip()
-                # Map singular to plural model type
-                model_type = type_mapping.get(model_type, model_type)
                 result = download_model(model_type, url)
                 results.append(result)
             except Exception as e:
@@ -332,8 +330,8 @@ def inference_handler(input_data):
         inference_request["enable_hr"] = True
         inference_request["hr_scale"] = input_data.get("hr_scale", 2.0)
         inference_request["hr_upscaler"] = input_data.get("hr_upscaler", "Latent")
-        inference_request["hr_second_pass_steps": input_data.get("hr_second_pass_steps", 20),
-        "denoising_strength": input_data.get("denoising_strength", 0.55)
+        inference_request["hr_second_pass_steps"] = input_data.get("hr_second_pass_steps", 20)
+        inference_request["denoising_strength"] = input_data.get("denoising_strength", 0.55)
 
     response = automatic_session.post(f"{LOCAL_URL}/txt2img", json=inference_request, timeout=600)
     if response.status_code != 200:
