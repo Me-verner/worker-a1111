@@ -1,34 +1,31 @@
 # Stage 1: Download models and extensions
 FROM alpine/git:2.43.0 as download
 
-RUN apk add --no-cache wget bash
+RUN apk add --no-cache wget
 
 WORKDIR /workspace
 
-COPY models.txt .
-COPY extensions.txt .
+COPY models.txt extensions.txt . 
 
-RUN mkdir -p /models && \
+# Download models
+RUN mkdir -p models && \
     if [ -s models.txt ]; then \
         echo "\nDownloading models..."; \
         while IFS= read -r url || [ -n "$url" ]; do \
-            if [ -n "$url" ]; then \
-                echo "\nDownloading model from: $url"; \
-                wget --content-disposition --show-progress -P /models "$url" || echo "Failed to download model: $url (skipping)"; \
-            fi; \
+            echo "Downloading model from: $url"; \
+            wget --content-disposition --show-progress -P models "$url" || echo "Failed to download model: $url"; \
         done < models.txt; \
     else \
         echo "\nmodels.txt is empty, skipping model download."; \
     fi
 
-RUN mkdir -p /extensions && \
+# Download extensions
+RUN mkdir -p extensions && \
     if [ -s extensions.txt ]; then \
         echo "\nDownloading extensions..."; \
-        while IFS= read -r repo || [ -n "$repo" ]; do \
-            if [ -n "$repo" ]; then \
-                echo "\nCloning extension from: $repo"; \
-                git clone "$repo" /extensions/$(basename "$repo") || echo "Failed to clone extension: $repo (skipping)"; \
-            fi; \
+        while IFS= read -r url || [ -n "$url" ]; do \
+            echo "Cloning extension from: $url"; \
+            git clone "$url" extensions/ || echo "Failed to clone extension: $url"; \
         done < extensions.txt; \
     else \
         echo "\nextensions.txt is empty, skipping extensions download."; \
@@ -61,19 +58,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements_versions.txt && \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
 
-# Copy downloaded models
-COPY --from=download /models /stable-diffusion-webui/models/Stable-diffusion
+# Copy downloaded models and extensions
+COPY --from=download /workspace/models /stable-diffusion-webui/models/Stable-diffusion
+COPY --from=download /workspace/extensions /stable-diffusion-webui/extensions
 
-# Copy downloaded extensions
-COPY --from=download /extensions /stable-diffusion-webui/extensions
-
-# Copy app files
-COPY src /src
 COPY requirements.txt .
-COPY test_input.json .
-
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
+
+COPY src /src
+COPY test_input.json .
 
 RUN chmod +x /src/start.sh
 CMD /src/start.sh
