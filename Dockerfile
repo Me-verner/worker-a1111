@@ -1,15 +1,10 @@
-# Stage 1: Download models
-FROM alpine/git:2.43.0 AS download
+# Stage 1: Prepare stage (no direct model download anymore)
+FROM alpine/git:2.43.0 as prepare
 
-RUN apk add --no-cache wget && \
-    mkdir /models && \
-    wget -v --content-disposition --show-progress -O /models/RealisticVision.safetensors "https://civitai.com/api/download/models/501240?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor&size=pruned&fp=fp16" 2>&1 || { echo "Failed to download RealisticVision"; exit 1; } && \
-    wget -v --content-disposition --show-progress -O /models/WaifuReaper.safetensors "https://civitai.com/api/download/models/648218?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor&size=pruned&fp=fp16" 2>&1 || { echo "Failed to download WaifuReaper"; exit 1; } && \
-    mkdir /loras && \
-    wget -v --content-disposition --show-progress -O /loras/AddDetail.safetensors "https://civitai.com/api/download/models/1506035?token=89f98b0d1d7c074688fc6958add259af&type=Model&format=SafeTensor" 2>&1 || { echo "Failed to download AddDetail"; exit 1; }
+RUN apk add --no-cache wget
 
 # Stage 2: Build the final image
-FROM python:3.10.14-slim AS build_final_image
+FROM python:3.10.14-slim as build_final_image
 
 ARG A1111_RELEASE=v1.9.3
 
@@ -23,8 +18,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && \
     apt install -y \
     fonts-dejavu-core rsync git jq moreutils aria2 wget \
-    libgoogle-perftools-dev libtcmalloc-minimal4 procps libgl1 libglib2.0-0 \
-    build-essential python3-dev && \
+    libgoogle-perftools-dev libtcmalloc-minimal4 procps libgl1 libglib2.0-0 && \
     apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && apt-get clean -y
 
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -35,18 +29,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements_versions.txt && \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
 
-COPY --from=download /models /stable-diffusion-webui/models/Stable-diffusion
-COPY --from=download /loras /stable-diffusion-webui/models/Lora
-
+# Copy necessary files
 COPY requirements.txt .
 COPY models.txt .
 COPY extensions.txt .
-COPY download.py .
 COPY test_input.json .
 COPY src .
 
+# Install python requirements
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
 
 RUN chmod +x /src/start.sh
+
 CMD ["/src/start.sh"]
