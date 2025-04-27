@@ -115,8 +115,13 @@ def extract_filename(response):
     url_filename = os.path.basename(response.url.split('?')[0])
     return url_filename if url_filename else "downloaded_model.safetensors"
 
-def download_model(model_type, url, filename=None, token=None):
+def download_model(input_data):
     """Download a model file from a URL and save it to the appropriate directory."""
+    model_type = input_data["type"]
+    url = input_data["url"]
+    filename = input_data.get("filename")
+    token = input_data.get("token")
+
     # Map singular to plural model type if necessary
     model_type = model_type_mapping.get(model_type, model_type)
     if model_type not in directories:
@@ -175,7 +180,7 @@ def install_from_file(file_path, install_type):
                 model_type, url = line.split('|', 1)
                 model_type = model_type.strip()
                 url = url.strip()
-                result = download_model(model_type, url)
+                result = download_model({"type": model_type, "url": url})
                 results.append(result)
             except Exception as e:
                 results.append({"error": str(e), "line": line})
@@ -408,6 +413,8 @@ def handler(event):
         return set_options(input_data.get("options", {}))
     elif action == "get_progress":
         return get_progress()
+    elif action == "download_model":
+        return download_model(input_data)
     elif action == "install_all":
         return install_all()
     elif action == "install_models":
