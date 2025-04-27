@@ -286,6 +286,20 @@ def get_sd_models():
         raise Exception(f"Failed to get SD models: {response.text}")
     return response.json()
 
+def get_samplers():
+    """Get the list of available samplers from the API."""
+    response = automatic_session.get(f"{LOCAL_URL}/samplers", timeout=60)
+    if response.status_code != 200:
+        raise Exception(f"Failed to get samplers: {response.text}")
+    return response.json()
+
+def get_schedulers():
+    """Get the list of available schedulers from the API."""
+    response = automatic_session.get(f"{LOCAL_URL}/schedulers", timeout=60)
+    if response.status_code != 200:
+        raise Exception(f"Failed to get schedulers: {response.text}")
+    return response.json()
+
 def get_options():
     """Get current WebUI options."""
     response = automatic_session.get(f"{LOCAL_URL}/options", timeout=60)
@@ -324,7 +338,12 @@ def inference_handler(input_data):
         "cfg_scale": input_data.get("cfg_scale", 7.5),
         "seed": input_data.get("seed", -1),
         "override_settings": override_settings,
+        "sampler_name": input_data.get("sampler_name", "DPM++ 2M"),
     }
+
+    # Include scheduler if provided
+    if "scheduler" in input_data:
+        inference_request["scheduler"] = input_data["scheduler"]
 
     if input_data.get("enable_hr", False):
         inference_request["enable_hr"] = True
@@ -354,7 +373,12 @@ def img2img_handler(input_data):
         "cfg_scale": input_data.get("cfg_scale", 7.5),
         "seed": input_data.get("seed", -1),
         "denoising_strength": input_data.get("denoising_strength", 0.75),
+        "sampler_name": input_data.get("sampler_name", "DPM++ 2M"),
     }
+
+    # Include scheduler if provided
+    if "scheduler" in input_data:
+        inference_request["scheduler"] = input_data["scheduler"]
 
     response = automatic_session.post(f"{LOCAL_URL}/img2img", json=inference_request, timeout=600)
     if response.status_code != 200:
@@ -374,6 +398,10 @@ def handler(event):
         return get_models()
     elif action == "get_sd_models":
         return get_sd_models()
+    elif action == "get_samplers":
+        return get_samplers()
+    elif action == "get_schedulers":
+        return get_schedulers()
     elif action == "get_options":
         return get_options()
     elif action == "set_options":
