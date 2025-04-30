@@ -13,6 +13,7 @@ import base64
 LOCAL_URL = "http://127.0.0.1:3000/sdapi/v1"
 REACTOR_URL = "http://127.0.0.1:3000/reactor"
 EXTENSIONS_DIR = "/stable-diffusion-webui/extensions"
+INSIGHTFACE_DIR = "/stable-diffusion-webui/models/insightface"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_FILE = os.path.join(SCRIPT_DIR, "models.txt")
 EXTENSIONS_FILE = os.path.join(SCRIPT_DIR, "extensions.txt")
@@ -69,7 +70,7 @@ def wait_for_service(url):
             if retries % 15 == 0:
                 print("Service not ready yet. Retrying...")
         except Exception as err:
-            print("Error: ", err)
+            print(f"Error waiting for service: {err}")
         time.sleep(0.2)
 
 def set_model(model_name):
@@ -328,6 +329,47 @@ def get_progress():
         raise Exception(f"Failed to get progress: {response.text}")
     return response.json()
 
+def check_reactor_status():
+    """Check ReActor extension status and dependencies."""
+    status = {
+        "extension_installed": False,
+        "api_available": False,
+        "model_available": False,
+        "dependencies_installed": False,
+        "details": {}
+    }
+
+    # Check if ReActor extension is installed
+    reactor_path = os.path.join(EXTENSIONS_DIR, "sd-webui-reactor")
+    status["extension_installed"] = os.path.exists(reactor_path)
+    status["details"]["extension_path"] = reactor_path
+    if status["extension_installed"]:
+        status["details"]["extension_files"] = os.listdir(reactor_path)[:10]  # Limit to 10 files for brevity
+
+    # Check if insightface model directory exists
+    status["model_available"] = os.path.exists(INSIGHTFACE_DIR) and "inswapper_128.onnx" in os.listdir(INSIGHTFACE_DIR)
+    status["details"]["insightface_dir"] = INSIGHTFACE_DIR
+    status["details"]["insightface_files"] = os.listdir(INSIGHTFACE_DIR) if os.path.exists(INSIGHTFACE_DIR) else []
+
+    # Check ReActor API availability
+    try:
+        response = automatic_session.get(f"{REACTOR_URL}/models", timeout=10)
+        status["api_available"] = response.status_code == 200
+        status["details"]["api_models_response"] = response.text
+    except Exception as e:
+        status["details"]["api_models_error"] = str(e)
+
+    # Check for dependencies
+    try:
+        import insightface
+        import onnxruntime
+        status["dependencies_installed"] = True
+    except ImportError as e:
+        status["details"]["dependencies_error"] = str(e)
+
+    print(f"ReActor status: {json.dumps(status, indent=2)}")
+    return status
+
 def get_reactor_models():
     """Get the list of available ReActor models."""
     response = automatic_session.get(f"{REACTOR_URL}/models", timeout=60)
@@ -362,48 +404,106 @@ def create_reactor_facemodel(input_data):
     return response.json()
 
 def face_swap_handler(input_data):
-    """Handle face swap using ReActor's external API."""
-    # Required parameters
-    source_image = input_data.get("source_image")  # Base64-encoded image
-    target_image = input_data.get("target_image")  # Base64-encoded image
+    """Handle face swap using ReActor's external API with fallback to built-in API."""
+    print("Checking ReActor API availability...")
+    api_available = False
+    try:
+        test_response = automatic_session.get(f"{REACTOR_URL}/models", timeout=10)
+        api_available = test_response.status_code == 200
+        print(f"ReActor models response: Status={test_response.status_code}, Body={test_response.text}")
+    except Exception as e:
+        print(f"ReActor API test failed: {str(e)}")
+
+    source_image = input_data.get("source_image")
+    target_image = input_data.get("target_image")
     if not source_image or not target_image:
         raise ValueError("Both source_image and target_image are required")
 
-    # Default payload with all possible parameters
-    payload = {
-        "source_image": source_image,
-        "target_image": target_image,
-        "source_faces_index": input_data.get("source_faces_index", [0]),
-        "face_index": input_data.get("face_index", [0]),
-        "upscaler": input_data.get("upscaler", "None"),
-        "scale": input_data.get("scale", 1),
-        "upscale_visibility": input_data.get("upscale_visibility", 1),
-        "face_restorer": input_data.get("face_restorer", "None"),
-        "restorer_visibility": input_data.get("restorer_visibility", 1),
-        "restore_first": input_data.get("restore_first", 1),
-        "model": input_data.get("model", "inswapper_128.onnx"),
-        "gender_source": input_data.get("gender_source", 0),
-        "gender_target": input_data.get("gender_target", 0),
-        "save_to_file": input_data.get("save_to_file", 0),
-        "result_file_path": input_data.get("result_file_path", ""),
-        "device": input_data.get("device", "CUDA"),
-        "mask_face": input_data.get("mask_face", 1),
-        "select_source": input_data.get("select_source", 0),  # 0: Image, 1: Face Model, 2: Source Folder
-        "face_model": input_data.get("face_model", ""),
-        "source_folder": input_data.get("source_folder", ""),
-        "random_image": input_data.get("random_image", 0),
-        "upscale_force": input_data.get("upscale_force", 0)
-    }
+    if api_available:
+        # External API
+        payload = {
+            "source_image": source_image,
+            "target_image": target_image,
+            "source_faces_index": input_data.get("source_faces_index", [0]),
+            "face_index": input_data.get("face_index", [0]),
+            "upscaler": input_data.get("upscaler", "None"),
+            "scale": input_data.get("scale", 1),
+            "upscale_visibility": input_data.get("upscale_visibility", 1),
+            "face_restorer": input_data.get("face_restorer", "None"),
+            "restorer_visibility": input_data.get("restorer_visibility", 1),
+            "restore_first": input_data.get("restore_first", 1),
+            "model": input_data.get("model", "inswapper_128.onnx"),
+            "gender_source": input_data.get("gender_source", 0),
+            "gender_target": input_data.get("gender_target", 0),
+            "save_to_file": input_data.get("save_to_file", 0),
+            "result_file_path": input_data.get("result_file_path", ""),
+            "device": input_data.get("device", "CUDA"),
+            "mask_face": input_data.get("mask_face", 1),
+            "select_source": input_data.get("select_source", 0),
+            "face_model": input_data.get("face_model", ""),
+            "source_folder": input_data.get("source_folder", ""),
+            "random_image": input_data.get("random_image", 0),
+            "upscale_force": input_data.get("upscale_force", 0)
+        }
 
-    response = automatic_session.post(
-        f"{REACTOR_URL}/image",
-        json=payload,
-        headers={"accept": "application/json", "Content-Type": "application/json"},
-        timeout=600
-    )
-    if response.status_code != 200:
-        raise Exception(f"Failed to perform face swap: {response.text}")
-    return response.json()
+        print(f"Attempting face swap request to {REACTOR_URL}/image with payload: {json.dumps(payload, indent=2)}")
+        response = automatic_session.post(
+            f"{REACTOR_URL}/image",
+            json=payload,
+            headers={"accept": "application/json", "Content-Type": "application/json"},
+            timeout=600
+        )
+        print(f"Face swap response: Status={response.status_code}, Body={response.text}")
+        if response.status_code != 200:
+            raise Exception(f"Failed to perform face swap: {response.text}")
+        return response.json()
+    else:
+        # Fallback to built-in WebUI API
+        print("Falling back to ReActor built-in WebUI API...")
+        payload = {
+            "prompt": input_data.get("prompt", ""),
+            "negative_prompt": input_data.get("negative_prompt", ""),
+            "steps": input_data.get("steps", 20),
+            "width": input_data.get("width", 512),
+            "height": input_data.get("height", 512),
+            "cfg_scale": input_data.get("cfg_scale", 7.5),
+            "seed": input_data.get("seed", -1),
+            "sampler_name": input_data.get("sampler_name", "DPM++ 2M"),
+            "alwayson_scripts": {
+                "reactor": {
+                    "args": [
+                        source_image,
+                        target_image,
+                        input_data.get("source_faces_index", [0])[0],
+                        input_data.get("face_index", [0])[0],
+                        input_data.get("model", "inswapper_128.onnx"),
+                        input_data.get("upscaler", "None"),
+                        input_data.get("scale", 1),
+                        input_data.get("upscale_visibility", 1),
+                        input_data.get("face_restorer", "None"),
+                        input_data.get("restorer_visibility", 1),
+                        input_data.get("restore_first", 1),
+                        input_data.get("gender_source", 0),
+                        input_data.get("gender_target", 0),
+                        input_data.get("mask_face", 1),
+                        input_data.get("select_source", 0),
+                        input_data.get("face_model", ""),
+                        input_data.get("source_folder", ""),
+                        input_data.get("random_image", 0),
+                        input_data.get("upscale_force", 0)
+                    ]
+                }
+            }
+        }
+        if "scheduler" in input_data:
+            payload["scheduler"] = input_data["scheduler"]
+
+        print(f"Attempting face swap via txt2img with ReActor script: {json.dumps(payload, indent=2)}")
+        response = automatic_session.post(f"{LOCAL_URL}/txt2img", json=payload, timeout=600)
+        print(f"Face swap response (built-in API): Status={response.status_code}, Body={response.text}")
+        if response.status_code != 200:
+            raise Exception(f"Failed to perform face swap (built-in API): {response.text}")
+        return response.json()
 
 def inference_handler(input_data):
     """Handle image generation with flexible parameters."""
@@ -425,7 +525,6 @@ def inference_handler(input_data):
         "sampler_name": input_data.get("sampler_name", "DPM++ 2M"),
     }
 
-    # Include scheduler if provided
     if "scheduler" in input_data:
         inference_request["scheduler"] = input_data["scheduler"]
 
@@ -460,7 +559,6 @@ def img2img_handler(input_data):
         "sampler_name": input_data.get("sampler_name", "DPM++ 2M"),
     }
 
-    # Include scheduler if provided
     if "scheduler" in input_data:
         inference_request["scheduler"] = input_data["scheduler"]
 
@@ -533,6 +631,8 @@ def handler(event):
         return get_reactor_facemodels()
     elif action == "create_reactor_facemodel":
         return create_reactor_facemodel(input_data)
+    elif action == "check_reactor_status":
+        return check_reactor_status()
     else:
         raise ValueError(f"Unknown action: {action}")
 
