@@ -8,8 +8,10 @@ import subprocess
 import shutil
 import time as time_module
 import re
+import base64
 
 LOCAL_URL = "http://127.0.0.1:3000/sdapi/v1"
+REACTOR_URL = "http://127.0.0.1:3000/reactor"
 EXTENSIONS_DIR = "/stable-diffusion-webui/extensions"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_FILE = os.path.join(SCRIPT_DIR, "models.txt")
@@ -326,6 +328,89 @@ def get_progress():
         raise Exception(f"Failed to get progress: {response.text}")
     return response.json()
 
+def get_reactor_models():
+    """Get the list of available ReActor models."""
+    response = automatic_session.get(f"{REACTOR_URL}/models", timeout=60)
+    if response.status_code != 200:
+        raise Exception(f"Failed to get ReActor models: {response.text}")
+    return response.json()
+
+def get_reactor_upscalers():
+    """Get the list of available ReActor upscalers."""
+    response = automatic_session.get(f"{REACTOR_URL}/upscalers", timeout=60)
+    if response.status_code != 200:
+        raise Exception(f"Failed to get ReActor upscalers: {response.text}")
+    return response.json()
+
+def get_reactor_facemodels():
+    """Get the list of available ReActor face models."""
+    response = automatic_session.get(f"{REACTOR_URL}/facemodels", timeout=60)
+    if response.status_code != 200:
+        raise Exception(f"Failed to get ReActor face models: {response.text}")
+    return response.json()
+
+def faceswap_handler(input_data):
+    """Handle face swapping using ReActor External API."""
+    # Required parameters
+    source_image = input_data.get("source_image")  # Base64 encoded image
+    target_image = input_data.get("target_image")  # Base64 encoded image
+    if not source_image or not target_image:
+        raise ValueError("source_image and target_image are required for faceswap")
+
+    # Default payload with minimal required parameters
+    payload = {
+        "source_image": source_image,
+        "target_image": target_image,
+        "source_faces_index": input_data.get("source_faces_index", [0]),
+        "face_index": input_data.get("face_index", [0]),
+        "model": input_data.get("model", "inswapper_128.onnx"),
+        "device": input_data.get("device", "CUDA"),
+    }
+
+    # Optional parameters for advanced configurations
+    if "upscaler" in input_data:
+        payload["upscaler"] = input_data["upscaler"]
+    if "scale" in input_data:
+        payload["scale"] = input_data["scale"]
+    if "upscale_visibility" in input_data:
+        payload["upscale_visibility"] = input_data["upscale_visibility"]
+    if "face_restorer" in input_data:
+        payload["face_restorer"] = input_data["face_restorer"]
+    if "restorer_visibility" in input_data:
+        payload["restorer_visibility"] = input_data["restorer_visibility"]
+    if "restore_first" in input_data:
+        payload["restore_first"] = input_data["restore_first"]
+    if "gender_source" in input_data:
+        payload["gender_source"] = input_data["gender_source"]
+    if "gender_target" in input_data:
+        payload["gender_target"] = input_data["gender_target"]
+    if "save_to_file" in input_data:
+        payload["save_to_file"] = input_data["save_to_file"]
+    if "result_file_path" in input_data:
+        payload["result_file_path"] = input_data["result_file_path"]
+    if "mask_face" in input_data:
+        payload["mask_face"] = input_data["mask_face"]
+    if "select_source" in input_data:
+        payload["select_source"] = input_data["select_source"]
+    if "face_model" in input_data:
+        payload["face_model"] = input_data["face_model"]
+    if "source_folder" in input_data:
+        payload["source_folder"] = input_data["source_folder"]
+    if "random_image" in input_data:
+        payload["random_image"] = input_data["random_image"]
+    if "upscale_force" in input_data:
+        payload["upscale_force"] = input_data["upscale_force"]
+
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    response = automatic_session.post(f"{REACTOR_URL}/image", json=payload, headers=headers, timeout=600)
+    if response.status_code != 200:
+        raise Exception(f"Failed to run faceswap: {response.text}")
+    return response.json()
+
 def inference_handler(input_data):
     """Handle image generation with flexible parameters."""
     model_name = input_data.get("model_name")
@@ -399,6 +484,8 @@ def handler(event):
         return inference_handler(input_data)
     elif action == "img2img":
         return img2img_handler(input_data)
+    elif action == "faceswap":
+        return faceswap_handler(input_data)
     elif action == "get_models":
         return get_models()
     elif action == "get_sd_models":
@@ -413,6 +500,12 @@ def handler(event):
         return set_options(input_data.get("options", {}))
     elif action == "get_progress":
         return get_progress()
+    elif action == "get_reactor_models":
+        return get_reactor_models()
+    elif action == "get_reactor_upscalers":
+        return get_reactor_upscalers()
+    elif action == "get_reactor_facemodels":
+        return get_reactor_facemodels()
     elif action == "download_model":
         return download_model(input_data)
     elif action == "install_all":
