@@ -349,66 +349,60 @@ def get_reactor_facemodels():
         raise Exception(f"Failed to get ReActor face models: {response.text}")
     return response.json()
 
-def faceswap_handler(input_data):
-    """Handle face swapping using ReActor External API."""
-    # Required parameters
-    source_image = input_data.get("source_image")  # Base64 encoded image
-    target_image = input_data.get("target_image")  # Base64 encoded image
-    if not source_image or not target_image:
-        raise ValueError("source_image and target_image are required for faceswap")
+def create_reactor_facemodel(input_data):
+    """Create a new ReActor face model from source images."""
+    payload = {
+        "source_images": input_data.get("source_images", []),
+        "name": input_data.get("name", ""),
+        "compute_method": input_data.get("compute_method", 0)
+    }
+    response = automatic_session.post(f"{REACTOR_URL}/facemodels", json=payload, timeout=600)
+    if response.status_code != 200:
+        raise Exception(f"Failed to create face model: {response.text}")
+    return response.json()
 
-    # Default payload with minimal required parameters
+def face_swap_handler(input_data):
+    """Handle face swap using ReActor's external API."""
+    # Required parameters
+    source_image = input_data.get("source_image")  # Base64-encoded image
+    target_image = input_data.get("target_image")  # Base64-encoded image
+    if not source_image or not target_image:
+        raise ValueError("Both source_image and target_image are required")
+
+    # Default payload with all possible parameters
     payload = {
         "source_image": source_image,
         "target_image": target_image,
         "source_faces_index": input_data.get("source_faces_index", [0]),
         "face_index": input_data.get("face_index", [0]),
+        "upscaler": input_data.get("upscaler", "None"),
+        "scale": input_data.get("scale", 1),
+        "upscale_visibility": input_data.get("upscale_visibility", 1),
+        "face_restorer": input_data.get("face_restorer", "None"),
+        "restorer_visibility": input_data.get("restorer_visibility", 1),
+        "restore_first": input_data.get("restore_first", 1),
         "model": input_data.get("model", "inswapper_128.onnx"),
+        "gender_source": input_data.get("gender_source", 0),
+        "gender_target": input_data.get("gender_target", 0),
+        "save_to_file": input_data.get("save_to_file", 0),
+        "result_file_path": input_data.get("result_file_path", ""),
         "device": input_data.get("device", "CUDA"),
+        "mask_face": input_data.get("mask_face", 1),
+        "select_source": input_data.get("select_source", 0),  # 0: Image, 1: Face Model, 2: Source Folder
+        "face_model": input_data.get("face_model", ""),
+        "source_folder": input_data.get("source_folder", ""),
+        "random_image": input_data.get("random_image", 0),
+        "upscale_force": input_data.get("upscale_force", 0)
     }
 
-    # Optional parameters for advanced configurations
-    if "upscaler" in input_data:
-        payload["upscaler"] = input_data["upscaler"]
-    if "scale" in input_data:
-        payload["scale"] = input_data["scale"]
-    if "upscale_visibility" in input_data:
-        payload["upscale_visibility"] = input_data["upscale_visibility"]
-    if "face_restorer" in input_data:
-        payload["face_restorer"] = input_data["face_restorer"]
-    if "restorer_visibility" in input_data:
-        payload["restorer_visibility"] = input_data["restorer_visibility"]
-    if "restore_first" in input_data:
-        payload["restore_first"] = input_data["restore_first"]
-    if "gender_source" in input_data:
-        payload["gender_source"] = input_data["gender_source"]
-    if "gender_target" in input_data:
-        payload["gender_target"] = input_data["gender_target"]
-    if "save_to_file" in input_data:
-        payload["save_to_file"] = input_data["save_to_file"]
-    if "result_file_path" in input_data:
-        payload["result_file_path"] = input_data["result_file_path"]
-    if "mask_face" in input_data:
-        payload["mask_face"] = input_data["mask_face"]
-    if "select_source" in input_data:
-        payload["select_source"] = input_data["select_source"]
-    if "face_model" in input_data:
-        payload["face_model"] = input_data["face_model"]
-    if "source_folder" in input_data:
-        payload["source_folder"] = input_data["source_folder"]
-    if "random_image" in input_data:
-        payload["random_image"] = input_data["random_image"]
-    if "upscale_force" in input_data:
-        payload["upscale_force"] = input_data["upscale_force"]
-
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/json"
-    }
-
-    response = automatic_session.post(f"{REACTOR_URL}/image", json=payload, headers=headers, timeout=600)
+    response = automatic_session.post(
+        f"{REACTOR_URL}/image",
+        json=payload,
+        headers={"accept": "application/json", "Content-Type": "application/json"},
+        timeout=600
+    )
     if response.status_code != 200:
-        raise Exception(f"Failed to run faceswap: {response.text}")
+        raise Exception(f"Failed to perform face swap: {response.text}")
     return response.json()
 
 def inference_handler(input_data):
@@ -484,8 +478,8 @@ def handler(event):
         return inference_handler(input_data)
     elif action == "img2img":
         return img2img_handler(input_data)
-    elif action == "faceswap":
-        return faceswap_handler(input_data)
+    elif action == "face_swap":
+        return face_swap_handler(input_data)
     elif action == "get_models":
         return get_models()
     elif action == "get_sd_models":
@@ -500,12 +494,6 @@ def handler(event):
         return set_options(input_data.get("options", {}))
     elif action == "get_progress":
         return get_progress()
-    elif action == "get_reactor_models":
-        return get_reactor_models()
-    elif action == "get_reactor_upscalers":
-        return get_reactor_upscalers()
-    elif action == "get_reactor_facemodels":
-        return get_reactor_facemodels()
     elif action == "download_model":
         return download_model(input_data)
     elif action == "install_all":
@@ -537,6 +525,14 @@ def handler(event):
             for model_type in refresh_endpoints.keys():
                 refresh_model_type(model_type)
             return {"status": "all models refreshed"}
+    elif action == "get_reactor_models":
+        return get_reactor_models()
+    elif action == "get_reactor_upscalers":
+        return get_reactor_upscalers()
+    elif action == "get_reactor_facemodels":
+        return get_reactor_facemodels()
+    elif action == "create_reactor_facemodel":
+        return create_reactor_facemodel(input_data)
     else:
         raise ValueError(f"Unknown action: {action}")
 
